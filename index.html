@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Gravity Flip" />
+  <meta name="theme-color" content="#050816" />
+  <title>Gravity Flip</title>
+  <style>
+    :root {
+      --bg: #050816;
+      --panel: rgba(10, 14, 30, 0.75);
+      --line: rgba(255,255,255,0.08);
+      --text: #eef4ff;
+      --muted: #97a3c8;
+      --cyan: #4df5ff;
+      --pink: #ff5fd2;
+      --yellow: #ffe66d;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      min-height: 100vh;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(77,245,255,0.08), transparent 25%),
+        radial-gradient(circle at bottom, rgba(255,95,210,0.08), transparent 25%),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+      touch-action: manipulation;
+    }
+    .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 12px; }
+    .top {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 16px; border-radius: 22px; background: var(--panel);
+      border: 1px solid var(--line); backdrop-filter: blur(14px);
+    }
+    .title h1 { margin: 0; font-size: 1.3rem; letter-spacing: -0.04em; }
+    .title p { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+    .scorebox { text-align: center; min-width: 90px; }
+    .scorebox span { display: block; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .scorebox strong { font-size: 1.55rem; }
+    .wrap {
+      border-radius: 28px; overflow: hidden; position: relative;
+      border: 1px solid var(--line); background: linear-gradient(180deg, #091126, #060914);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+    canvas { width: 100%; aspect-ratio: 9 / 16; display: block; }
+    .overlay {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      padding: 18px; background: rgba(2,4,12,0.2);
+    }
+    .overlay.hidden { display: none; }
+    .card {
+      width: min(86%, 320px); text-align: center; background: rgba(8,12,24,0.8);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 18px;
+      backdrop-filter: blur(14px); box-shadow: 0 18px 40px rgba(0,0,0,0.4);
+    }
+    .card h2 { margin: 0; font-size: 1.35rem; }
+    .card p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; }
+    .big { font-size: 2.4rem; font-weight: 900; margin: 10px 0 0; letter-spacing: -0.05em; }
+    .meta { display: flex; justify-content: center; gap: 18px; margin-top: 10px; color: var(--muted); font-size: 0.95rem; }
+    .btn {
+      margin-top: 14px; min-height: 54px; width: 100%; border: 0; border-radius: 18px;
+      background: linear-gradient(135deg, var(--cyan), var(--pink)); color: #08111f;
+      font: inherit; font-weight: 900; cursor: pointer;
+    }
+    .hint {
+      padding: 0 8px 8px; text-align: center; color: var(--muted); font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top">
+      <div class="title">
+        <h1>Gravity Flip</h1>
+        <p>Tap to flip between floor and ceiling.</p>
+      </div>
+      <div class="scorebox">
+        <span>Score</span>
+        <strong id="score">0</strong>
+      </div>
+    </div>
+
+    <div class="wrap" id="wrap">
+      <canvas id="game" width="720" height="1280"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="card" id="card"></div>
+      </div>
+    </div>
+
+    <div class="hint">Single tap only. Survive as long as possible.</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const card = document.getElementById('card');
+    const scoreEl = document.getElementById('score');
+    const wrap = document.getElementById('wrap');
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const FLOOR_Y = H - 170;
+    const CEIL_Y = 170;
+    const BALL_R = 28;
+    const SPIKE_W = 56;
+    const SPIKE_H = 48;
+    const GAP_MIN = 220;
+    const BEST_KEY = 'gravityFlipHighScore';
+
+    let running = false;
+    let score = 0;
+    let best = Number(localStorage.getItem(BEST_KEY) || 0);
+    let lastTime = 0;
+    let elapsed = 0;
+    let shake = 0;
+    let particles = [];
+    let speed = 380;
+    let worldX = 0;
+    let nextSpikeX = 480;
+    let spikes = [];
+    let audioCtx = null;
+    let audioReady = false;
+
+    const ball = {
+      x: 190,
+      y: FLOOR_Y,
+      targetY: FLOOR_Y,
+      onTop: false,
+      trail: []
+    };
+
+    function ensureAudio() {
+      if (audioReady) return;
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = new Ctx();
+      audioReady = true;
+    }
+
+    function beep(type, freq, dur, gain = 0.03) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(70, freq * 0.82), now + dur);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.connect(g).connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + dur + 0.02);
+    }
+
+    function flipSound() { beep('triangle', 760, 0.08, 0.035); }
+    function deathSound() {
+      beep('sawtooth', 260, 0.12, 0.04);
+      setTimeout(() => beep('square', 160, 0.18, 0.03), 40);
+    }
+
+    function setOverlay(type) {
+      overlay.classList.remove('hidden');
+      if (type === 'start') {
+        card.innerHTML = `
+          <h2>Tap to Start</h2>
+          <p>Flip gravity to dodge spikes above and below.</p>
+          <button class="btn" id="startBtn">Start Game</button>
+        `;
+        document.getElementById('startBtn').onclick = startGame;
+      } else {
+        card.innerHTML = `
+          <h2>Game Over</h2>
+          <div class="big">${score}</div>
+          <p>You hit a spike.</p>
+          <div class="meta"><span>Best ${best}</span><span>Speed ${Math.round(speed)}</span></div>
+          <button class="btn" id="restartBtn">Restart</button>
+        `;
+        document.getElementById('restartBtn').onclick = startGame;
+      }
+    }
+
+    function hideOverlay() { overlay.classList.add('hidden'); }
+
+    function resetGame() {
+      score = 0;
+      elapsed = 0;
+      speed = 380;
+      worldX = 0;
+      nextSpikeX = 480;
+      spikes = [];
+      particles = [];
+      shake = 0;
+      ball.y = FLOOR_Y;
+      ball.targetY = FLOOR_Y;
+      ball.onTop = false;
+      ball.trail = [];
+      scoreEl.textContent = '0';
+      for (let i = 0; i < 8; i++) spawnSpike();
+    }
+
+    function startGame() {
+      ensureAudio();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      resetGame();
+      running = true;
+      hideOverlay();
+    }
+
+    function flipGravity() {
+      ensureAudio();
+      if (!running) return startGame();
+      ball.onTop = !ball.onTop;
+      ball.targetY = ball.onTop ? CEIL_Y : FLOOR_Y;
+      for (let i = 0; i < 8; i++) {
+        particles.push({
+          x: ball.x,
+          y: ball.y,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 0.5) * 8,
+          life: 22 + Math.random() * 12,
+          age: 0,
+          color: i % 2 ? '#4df5ff' : '#ff5fd2'
+        });
+      }
+      flipSound();
+    }
+
+    function spawnSpike() {
+      const side = Math.random() < 0.5 ? 'bottom' : 'top';
+      const tighten = Math.min(1, elapsed / 45);
+      const gap = GAP_MIN - tighten * 80 + Math.random() * 140;
+      nextSpikeX += gap;
+      spikes.push({ x: nextSpikeX, side, passed: false });
+      if (Math.random() < 0.28 + tighten * 0.2) {
+        spikes.push({ x: nextSpikeX + 72, side: side === 'top' ? 'bottom' : 'top', passed: false });
+      }
+    }
+
+    function spikeTipY(spike) {
+      return spike.side === 'top' ? SPIKE_H : H - SPIKE_H;
+    }
+
+    function spikeBaseY(spike) {
+      return spike.side === 'top' ? 0 : H;
+    }
+
+    function collideCircleTriangle(cx, cy, r, spikeX, side) {
+      const ax = spikeX;
+      const bx = spikeX + SPIKE_W;
+      const tipX = spikeX + SPIKE_W / 2;
+      const tipY = side === 'top' ? SPIKE_H : H - SPIKE_H;
+      const minX = spikeX - r;
+      const maxX = spikeX + SPIKE_W + r;
+      if (cx < minX || cx > maxX) return false;
+      if (side === 'top') {
+        if (cy - r > SPIKE_H + 8) return false;
+      } else {
+        if (cy + r < H - SPIKE_H - 8) return false;
+      }
+      const samples = 12;
+      for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        const px = spikeX + t * SPIKE_W;
+        const edgeY = side === 'top'
+          ? (px <= tipX ? (px - ax) / (tipX - ax) * tipY : (bx - px) / (bx - tipX) * tipY)
+          : H - (px <= tipX ? (px - ax) / (tipX - ax) * SPIKE_H : (bx - px) / (bx - tipX) * SPIKE_H);
+        const dy = cy - edgeY;
+        const dx = cx - px;
+        if (dx * dx + dy * dy <= r * r) return true;
+      }
+      return false;
+    }
+
+    function endGame() {
+      running = false;
+      shake = 18;
+      deathSound();
+      best = Math.max(best, score);
+      localStorage.setItem(BEST_KEY, String(best));
+      setOverlay('gameover');
+    }
+
+    function update(dt) {
+      if (!running) return;
+      elapsed += dt;
+      speed += dt * 5.5;
+      worldX += speed * dt;
+
+      ball.y += (ball.targetY - ball.y) * Math.min(1, dt * 18);
+      ball.trail.unshift({ x: ball.x, y: ball.y });
+      if (ball.trail.length > 10) ball.trail.pop();
+
+      while (nextSpikeX - worldX < W + 300) spawnSpike();
+      spikes = spikes.filter(s => s.x - worldX > -120);
+
+      spikes.forEach(spike => {
+        const sx = spike.x - worldX;
+        if (!spike.passed && sx + SPIKE_W < ball.x) {
+          spike.passed = true;
+          score += 1;
+          scoreEl.textContent = score;
+        }
+        if (collideCircleTriangle(ball.x, ball.y, BALL_R, sx, spike.side)) endGame();
+      });
+
+      particles = particles.filter(p => {
+        p.age += dt * 60;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        return p.age < p.life;
+      });
+      shake *= 0.86;
+    }
+
+    function drawSpike(spike) {
+      const x = spike.x - worldX;
+      const yBase = spikeBaseY(spike);
+      const tipY = spikeTipY(spike);
+      const g = ctx.createLinearGradient(0, spike.side === 'top' ? 0 : H - SPIKE_H, 0, spike.side === 'top' ? SPIKE_H : H);
+      g.addColorStop(0, '#ff5fd2');
+      g.addColorStop(1, '#4df5ff');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      if (spike.side === 'top') {
+        ctx.moveTo(x, yBase);
+        ctx.lineTo(x + SPIKE_W, yBase);
+        ctx.lineTo(x + SPIKE_W / 2, tipY);
+      } else {
+        ctx.moveTo(x, yBase);
+        ctx.lineTo(x + SPIKE_W, yBase);
+        ctx.lineTo(x + SPIKE_W / 2, tipY);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      const offsetX = shake ? (Math.random() - 0.5) * shake : 0;
+      const offsetY = shake ? (Math.random() - 0.5) * shake : 0;
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#071024');
+      g.addColorStop(1, '#050816');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.fillStyle = 'rgba(77,245,255,0.08)';
+      ctx.fillRect(0, 0, W, 10);
+      ctx.fillStyle = 'rgba(255,95,210,0.08)';
+      ctx.fillRect(0, H - 10, W, 10);
+
+      spikes.forEach(drawSpike);
+
+      ball.trail.forEach((t, i) => {
+        const alpha = (1 - i / ball.trail.length) * 0.2;
+        ctx.fillStyle = `rgba(77,245,255,${alpha})`;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, BALL_R * (1 - i / ball.trail.length * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      const glow = ctx.createRadialGradient(ball.x - 10, ball.y - 10, 4, ball.x, ball.y, BALL_R * 2.4);
+      glow.addColorStop(0, '#ffffff');
+      glow.addColorStop(0.4, '#4df5ff');
+      glow.addColorStop(1, 'rgba(255,95,210,0.15)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.arc(ball.x - 9, ball.y - 10, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      particles.forEach(p => {
+        const a = 1 - p.age / p.life;
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = a;
+        ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
+        ctx.globalAlpha = 1;
+      });
+      ctx.restore();
+    }
+
+    function frame(ts) {
+      if (!lastTime) lastTime = ts;
+      const dt = Math.min(0.032, (ts - lastTime) / 1000);
+      lastTime = ts;
+      update(dt);
+      draw();
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      flipGravity();
+    }, { passive: false });
+
+    best = Number(localStorage.getItem(BEST_KEY) || 0);
+    setOverlay('start');
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
