@@ -25,9 +25,9 @@
       min-height: 100vh;
       font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background:
-        radial-gradient(circle at top, rgba(77,245,255,0.08), transparent 25%),
-        radial-gradient(circle at bottom, rgba(255,95,210,0.08), transparent 25%),
-        var(--bg);
+        radial-gradient(circle at top, rgba(77,245,255,0.16), transparent 30%),
+        radial-gradient(circle at bottom, rgba(255,95,210,0.16), transparent 30%),
+        linear-gradient(180deg, #0a1030, var(--bg));
       color: var(--text);
       display: flex;
       justify-content: center;
@@ -108,8 +108,8 @@
 
     const W = canvas.width;
     const H = canvas.height;
-    const FLOOR_Y = H - 86;
-    const CEIL_Y = 86;
+    const FLOOR_Y = H - 54;
+    const CEIL_Y = 54;
     const BALL_R = 28;
     const SPIKE_W = 56;
     const SPIKE_H = 48;
@@ -329,7 +329,8 @@
       const yBase = spikeBaseY(spike);
       const tipY = spikeTipY(spike);
       const g = ctx.createLinearGradient(0, spike.side === 'top' ? 0 : H - SPIKE_H, 0, spike.side === 'top' ? SPIKE_H : H);
-      g.addColorStop(0, '#ff5fd2');
+      g.addColorStop(0, '#ffe66d');
+      g.addColorStop(0.5, '#ff5fd2');
       g.addColorStop(1, '#4df5ff');
       ctx.fillStyle = g;
       ctx.beginPath();
@@ -354,15 +355,16 @@
       ctx.translate(offsetX, offsetY);
 
       const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, '#071024');
+      g.addColorStop(0, '#0a1236');
+      g.addColorStop(0.5, '#081327');
       g.addColorStop(1, '#050816');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
 
-      ctx.fillStyle = 'rgba(77,245,255,0.08)';
-      ctx.fillRect(0, 0, W, 10);
-      ctx.fillStyle = 'rgba(255,95,210,0.08)';
-      ctx.fillRect(0, H - 10, W, 10);
+      ctx.fillStyle = 'rgba(77,245,255,0.22)';
+      ctx.fillRect(0, 0, W, 16);
+      ctx.fillStyle = 'rgba(255,95,210,0.22)';
+      ctx.fillRect(0, H - 16, W, 16);
 
       spikes.forEach(drawSpike);
 
@@ -380,8 +382,12 @@
       glow.addColorStop(1, 'rgba(255,95,210,0.15)');
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
+      ctx.arc(ball.x, ball.y, BALL_R * 1.02, 0, Math.PI * 2);
       ctx.fill();
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 4;
+      ctx.stroke();
 
       ctx.fillStyle = 'rgba(255,255,255,0.35)';
       ctx.beginPath();
