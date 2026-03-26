@@ -433,12 +433,16 @@
       requestAnimationFrame(frame);
     }
 
+    let lastTapAt = 0;
     function handleFlipInput(e) {
       if (e) e.preventDefault();
+      const now = performance.now();
+      if (now - lastTapAt < 40) return;
+      lastTapAt = now;
       flipGravity();
     }
 
-    wrap.addEventListener('click', handleFlipInput, { passive: false });
+    wrap.addEventListener('pointerdown', handleFlipInput, { passive: false });
     wrap.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
     best = Number(localStorage.getItem(BEST_KEY) || 0);
