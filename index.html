@@ -434,12 +434,11 @@
     }
 
     function handleFlipInput(e) {
-      e.preventDefault();
+      if (e) e.preventDefault();
       flipGravity();
     }
 
-    wrap.addEventListener('pointerdown', handleFlipInput, { passive: false });
-    wrap.addEventListener('touchstart', handleFlipInput, { passive: false });
+    wrap.addEventListener('click', handleFlipInput, { passive: false });
     wrap.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
     best = Number(localStorage.getItem(BEST_KEY) || 0);
