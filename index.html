@@ -39,6 +39,7 @@
       display: flex; justify-content: space-between; align-items: center;
       padding: 14px 16px; border-radius: 22px; background: var(--panel);
       border: 1px solid var(--line); backdrop-filter: blur(14px);
+      display: none;
     }
     .title h1 { margin: 0; font-size: 1.3rem; letter-spacing: -0.04em; }
     .title p { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
@@ -49,11 +50,26 @@
       border-radius: 28px; overflow: hidden; position: relative;
       border: 1px solid var(--line); background: linear-gradient(180deg, #091126, #060914);
       box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      touch-action: manipulation;
     }
     canvas { width: 100%; aspect-ratio: 9 / 16; display: block; }
     .overlay {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       padding: 18px; background: rgba(2,4,12,0.2);
+    }
+    .score-float {
+      position: absolute;
+      top: 34px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 3rem;
+      font-weight: 900;
+      letter-spacing: -0.06em;
+      color: white;
+      opacity: 0.7;
+      text-shadow: 0 6px 20px rgba(0,0,0,0.28);
+      pointer-events: none;
+      z-index: 2;
     }
     .overlay.hidden { display: none; }
     .card {
@@ -89,6 +105,7 @@
     </div>
 
     <div class="wrap" id="wrap">
+      <div class="score-float" id="scoreFloat">0</div>
       <canvas id="game" width="720" height="1280"></canvas>
       <div class="overlay" id="overlay">
         <div class="card" id="card"></div>
@@ -104,6 +121,7 @@
     const overlay = document.getElementById('overlay');
     const card = document.getElementById('card');
     const scoreEl = document.getElementById('score');
+    const scoreFloat = document.getElementById('scoreFloat');
     const wrap = document.getElementById('wrap');
 
     const W = canvas.width;
@@ -205,6 +223,7 @@
       ball.onTop = false;
       ball.trail = [];
       scoreEl.textContent = '0';
+      scoreFloat.textContent = '0';
       for (let i = 0; i < 8; i++) spawnSpike();
     }
 
@@ -309,6 +328,7 @@
           spike.passed = true;
           score += 1;
           scoreEl.textContent = score;
+          scoreFloat.textContent = score;
         }
         if (collideCircleTriangle(ball.x, ball.y, BALL_R, sx, spike.side)) endGame();
       });
@@ -413,10 +433,14 @@
       requestAnimationFrame(frame);
     }
 
-    window.addEventListener('pointerdown', (e) => {
+    function handleFlipInput(e) {
       e.preventDefault();
       flipGravity();
-    }, { passive: false });
+    }
+
+    wrap.addEventListener('pointerdown', handleFlipInput, { passive: false });
+    wrap.addEventListener('touchstart', handleFlipInput, { passive: false });
+    wrap.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
     best = Number(localStorage.getItem(BEST_KEY) || 0);
     setOverlay('start');
