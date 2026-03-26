@@ -50,7 +50,10 @@
       border-radius: 28px; overflow: hidden; position: relative;
       border: 1px solid var(--line); background: linear-gradient(180deg, #091126, #060914);
       box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-      touch-action: manipulation;
+      touch-action: none;
+      overscroll-behavior: contain;
+      -webkit-user-select: none;
+      user-select: none;
     }
     canvas { width: 100%; aspect-ratio: 9 / 16; display: block; }
     .overlay {
@@ -443,6 +446,9 @@
     }
 
     wrap.addEventListener('pointerdown', handleFlipInput, { passive: false });
+    wrap.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    wrap.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
+    wrap.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
     wrap.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
     best = Number(localStorage.getItem(BEST_KEY) || 0);
